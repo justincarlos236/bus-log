@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bus Log</title>
+<meta name="description" content="Record bus arrival times at Blk 442, Pasir Ris Dr 1.">
+<meta name="theme-color" content="#0B0F12">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230B0F12'/%3E%3Ctext y='68' x='50' font-size='54' text-anchor='middle'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='78' font-size='80'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+
+<style>
+  /* Single, deliberate theme: used outdoors at a bus stop, often at night.
+     High contrast, no theme switching mid-session. */
+  :root {
+    --ground:  #0B0F12;
+    --panel:   #161E24;
+    --panel-2: #202B33;
+    --edge:    #31414C;
+    --ink:     #F0F5F8;
+    --dim:     #93A6B2;
+    --signal:  #FFB020;
+    --go:      #35C77A;
+    --warn:    #E5624A;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior: none;
+  }
+  .wrap { max-width: 30rem; margin: 0 auto; padding: 0.9rem 0.9rem 2.5rem; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding: 0.85rem 1rem;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 14px;
+    position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .clock {
+    font-size: 2.3rem; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--signal);
+  }
+  .where { text-align: right; font-size: 0.72rem; color: var(--dim); line-height: 1.45; }
+  .where b { color: var(--ink); }
+
+  .instruction {
+    margin: 1.1rem 0 0.7rem; font-size: 1rem; line-height: 1.5; color: var(--ink);
+    text-align: center;
+  }
+  .instruction span { color: var(--signal); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+  button.bus {
+    appearance: none; border: 1px solid var(--edge); background: var(--panel-2);
+    color: var(--ink); border-radius: 16px; min-height: 5rem;
+    font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em; cursor: pointer;
+    transition: transform .12s cubic-bezier(.2,.8,.3,1), background .12s, border-color .12s;
+  }
+  button.bus:active { transform: scale(.94); }
+  button.bus.hit { background: var(--go); border-color: var(--go); color: #05231A; }
+  button.bus:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  .actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+  button.act {
+    flex: 1; appearance: none; border: 1px solid var(--edge); background: transparent;
+    color: var(--dim); border-radius: 12px; padding: 0.85rem 0.5rem;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button.act:active { background: var(--panel-2); }
+  button.act.primary { background: var(--signal); border-color: var(--signal); color: #241600; }
+  button.act.danger { color: var(--warn); border-color: #4B2B25; }
+  button.act:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  h2 {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dim); margin: 1.6rem 0 0.5rem;
+  }
+  ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column-reverse; gap: 3px; }
+  ol li {
+    display: grid; grid-template-columns: 6rem 1fr; align-items: center; gap: 0.7rem;
+    padding: 0.62rem 0.8rem; background: var(--panel); border-radius: 9px;
+    font-variant-numeric: tabular-nums; font-size: 1rem;
+  }
+  ol li .t { color: var(--signal); font-weight: 600; }
+  ol li .s { font-weight: 700; }
+  ol li.today { border-left: 3px solid var(--go); }
+  ol li.fresh { animation: pop .4s ease-out; }
+  @keyframes pop { from { background: var(--go); } to { background: var(--panel); } }
+
+  .empty { color: var(--dim); font-size: 0.92rem; line-height: 1.6; text-align: center; padding: 1.4rem 0.5rem; }
+  .hint { color: var(--dim); font-size: 0.78rem; line-height: 1.6; margin-top: 1.4rem; text-align: center; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="where">
+      <b>Blk 442</b><br>Pasir Ris Dr 1<br>
+      <b id="todayCount">0</b> today
+    </div>
+  </header>
+
+  <p class="instruction">Blur blur Auntie, tap the bus number <span>the moment it stops and the door opens</span></p>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="actions">
+    <button class="act danger" id="undo" type="button">Undo</button>
+    <button class="act primary" id="send" type="button">Send to Justin</button>
+  </div>
+
+  <h2>Recorded</h2>
+  <ol id="log"></ol>
+  <div class="empty" id="empty">Nothing yet today.<br>Two or three buses is plenty.</div>
+
+  <p class="hint">
+    Saved on this phone, so closing the page is fine.<br>
+    Tap <b>Send to Justin</b> whenever, then <b>Clear sent</b>.
+  </p>
+
+  <div class="actions" style="margin-top:0.8rem">
+    <button class="act" id="clear" type="button">Clear sent</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SERVICES = ["12", "12e", "21", "39", "53", "81", "109", "358", "518", "Other"];
+  var KEY = "buslog-78069-v1";
+
+  var entries = [];
+  try {
+    var saved = localStorage.getItem(KEY);
+    if (saved) { entries = JSON.parse(saved) || []; }
+  } catch (e) { entries = []; }
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function hhmmss(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()); }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+
+  setInterval(function () {
+    document.getElementById("clock").textContent = hhmmss(new Date());
+  }, 200);
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch (e) {}
+  }
+
+  function render(freshIdx) {
+    var today = ymd(new Date());
+    var log = document.getElementById("log");
+    var todayN = 0;
+
+    log.innerHTML = "";
+    entries.forEach(function (e, i) {
+      if (e.date === today) { todayN++; }
+      var li = document.createElement("li");
+      li.className = (e.date === today ? "today" : "") + (i === freshIdx ? " fresh" : "");
+      var label = e.date === today ? e.time : e.date.slice(5) + "  " + e.time;
+      li.innerHTML = '<span class="t">' + label + '</span><span class="s">' + e.service + "</span>";
+      log.appendChild(li);
+    });
+
+    document.getElementById("todayCount").textContent = todayN;
+    document.getElementById("empty").style.display = entries.length ? "none" : "block";
+  }
+
+  function record(service, btn) {
+    var now = new Date();
+    entries.push({ date: ymd(now), time: hhmmss(now), service: service });
+    save();
+    render(entries.length - 1);
+
+    btn.classList.add("hit");
+    setTimeout(function () { btn.classList.remove("hit"); }, 240);
+    if (navigator.vibrate) { navigator.vibrate(20); }
+  }
+
+  var grid = document.getElementById("grid");
+  SERVICES.forEach(function (svc) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "bus";
+    b.textContent = svc;
+    if (svc === "Other") { b.style.fontSize = "1.1rem"; }
+    b.addEventListener("click", function () { record(svc, b); });
+    grid.appendChild(b);
+  });
+
+  document.getElementById("undo").addEventListener("click", function () {
+    if (!entries.length) { return; }
+    entries.pop();
+    save();
+    render(-1);
+    if (navigator.vibrate) { navigator.vibrate([14, 45, 14]); }
+  });
+
+  function asText() {
+    if (!entries.length) { return "(nothing recorded)"; }
+    return "stop 78069\n" + entries.map(function (e) {
+      return e.date + "  " + e.time + "  " + e.service;
+    }).join("\n");
+  }
+
+  document.getElementById("send").addEventListener("click", async function (ev) {
+    var btn = ev.currentTarget;
+    var text = asText();
+
+    // Web Share opens the phone's own share sheet, so it can go straight to
+    // WhatsApp or Messages. Only available over HTTPS, which is why this is
+    // hosted rather than opened as a local file.
+    if (navigator.share) {
+      try { await navigator.share({ title: "Bus log", text: text }); return; }
+      catch (e) { if (e && e.name === "AbortError") { return; } }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = "Send to Justin"; }, 2000);
+    } catch (e) {
+      window.prompt("Copy this and send it to Justin:", text);
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", function () {
+    if (!entries.length) { return; }
+    if (!window.confirm("Clear all " + entries.length + " recorded buses?\n\nOnly do this after sending them.")) { return; }
+    entries = [];
+    save();
+    render(-1);
+  });
+
+  render(-1);
+})();
+</script>
+</body>
+</html>
