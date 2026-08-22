@@ -122,11 +122,12 @@
 
   <p class="hint">
     Saved on this phone, so closing the page is fine.<br>
-    Tap <b>Send to Justin</b> whenever, then <b>Clear sent</b>.
+    Send whenever you like, even once a week.<br>
+    No need to clear. Sending the same list twice is fine.
   </p>
 
   <div class="actions" style="margin-top:0.8rem">
-    <button class="act" id="clear" type="button">Clear sent</button>
+    <button class="act" id="clear" type="button">Clear all</button>
   </div>
 
 </div>
@@ -234,7 +235,7 @@
 
   document.getElementById("clear").addEventListener("click", function () {
     if (!entries.length) { return; }
-    if (!window.confirm("Clear all " + entries.length + " recorded buses?\n\nOnly do this after sending them.")) { return; }
+    if (!window.confirm("Delete all " + entries.length + " recorded buses?\n\nThere is no other copy and this cannot be undone.\n\nYou do not need to clear: sending the same list again is fine.")) { return; }
     entries = [];
     save();
     render(-1);
