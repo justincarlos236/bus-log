@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Field Log</title>
+<meta name="description" content="Record bus arrivals at a stop, or stop-by-stop times during a ride.">
+<meta name="theme-color" content="#0B0F12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='78' font-size='80'%3E%F0%9F%93%8B%3C/text%3E%3C/svg%3E">
+
+<style>
+  /* One theme, chosen for use outdoors on a phone, sometimes in sun and sometimes at
+     night. No theme switching: the eye should not have to re-adapt mid-session. */
+  :root {
+    --ground:  #0B0F12;
+    --panel:   #161E24;
+    --panel-2: #202B33;
+    --edge:    #31414C;
+    --ink:     #F0F5F8;
+    --dim:     #93A6B2;
+    --signal:  #FFB020;
+    --go:      #35C77A;
+    --warn:    #E5624A;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior: none;
+  }
+  .wrap { max-width: 30rem; margin: 0 auto; padding: 0.9rem 0.9rem 2.5rem; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.8rem 1rem; background: var(--panel);
+    border: 1px solid var(--edge); border-radius: 14px;
+    position: sticky; top: 0.5rem; z-index: 10;
+  }
+  .clock {
+    font-size: 2.2rem; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--signal);
+  }
+  .where { text-align: right; font-size: 0.72rem; color: var(--dim); line-height: 1.45; }
+  .where b { color: var(--ink); }
+
+  .tabs { display: flex; gap: 0.5rem; margin: 0.9rem 0 0; }
+  .tabs button {
+    flex: 1; appearance: none; font-family: inherit; cursor: pointer;
+    border: 1px solid var(--edge); background: transparent; color: var(--dim);
+    border-radius: 12px; padding: 0.8rem 0.5rem; font-size: 0.88rem; font-weight: 700;
+  }
+  .tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--ink); border-color: var(--dim); }
+  .tabs button:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  .instruction { margin: 1.1rem 0 0.7rem; font-size: 0.98rem; line-height: 1.5; text-align: center; }
+  .instruction span { color: var(--signal); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+  button.bus {
+    appearance: none; border: 1px solid var(--edge); background: var(--panel-2);
+    color: var(--ink); border-radius: 16px; min-height: 5.5rem; font-family: inherit;
+    font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em; cursor: pointer;
+    transition: transform .12s cubic-bezier(.2,.8,.3,1), background .12s, border-color .12s;
+  }
+  button.bus:active { transform: scale(.94); }
+  button.bus.hit { background: var(--go); border-color: var(--go); color: #05231A; }
+  button.bus:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  /* Ride mode. One enormous target, because it is pressed on a moving bus. */
+  button.nextstop {
+    display: block; width: 100%; appearance: none; font-family: inherit; cursor: pointer;
+    border: 1px solid var(--go); background: var(--panel-2); color: var(--ink);
+    border-radius: 18px; padding: 1.3rem 1rem; min-height: 8.5rem; text-align: left;
+    transition: transform .12s cubic-bezier(.2,.8,.3,1), background .12s;
+  }
+  button.nextstop:active { transform: scale(.97); background: var(--go); color: #05231A; }
+  button.nextstop:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  button.nextstop .kicker {
+    display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--go); margin-bottom: 0.5rem;
+  }
+  button.nextstop .name { display: block; font-size: 1.7rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
+  button.nextstop .code { display: block; font-size: 0.9rem; color: var(--dim); margin-top: 0.4rem; font-variant-numeric: tabular-nums; }
+  button.nextstop[disabled] { opacity: 0.5; border-color: var(--edge); cursor: default; }
+
+  .progress { font-size: 0.78rem; color: var(--dim); text-align: center; margin: 0.8rem 0 0; }
+
+  .actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+  button.act {
+    flex: 1; appearance: none; border: 1px solid var(--edge); background: transparent;
+    color: var(--dim); border-radius: 12px; padding: 0.85rem 0.5rem;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button.act:active { background: var(--panel-2); }
+  button.act.primary { background: var(--signal); border-color: var(--signal); color: #241600; }
+  button.act.danger { color: var(--warn); border-color: #4B2B25; }
+  button.act:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  h2 {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dim); margin: 1.6rem 0 0.5rem;
+  }
+  ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column-reverse; gap: 3px; }
+  ol li {
+    display: grid; grid-template-columns: 5.5rem 1fr; align-items: center; gap: 0.7rem;
+    padding: 0.62rem 0.8rem; background: var(--panel); border-radius: 9px;
+    font-variant-numeric: tabular-nums; font-size: 0.98rem;
+  }
+  ol li .t { color: var(--signal); font-weight: 600; }
+  ol li .s { font-weight: 700; }
+  ol li.fresh { animation: pop .4s ease-out; }
+  @keyframes pop { from { background: var(--go); } to { background: var(--panel); } }
+
+  .empty { color: var(--dim); font-size: 0.92rem; line-height: 1.6; text-align: center; padding: 1.4rem 0.5rem; }
+  .hint { color: var(--dim); font-size: 0.78rem; line-height: 1.6; margin-top: 1.4rem; text-align: center; }
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="where">
+      <b id="whereName">Opp Our Tampines Hub</b><br>
+      <span id="whereSub">76059, Tampines Ave 5</span><br>
+      <b id="count">0</b> recorded
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tabStop" type="button" role="tab" aria-selected="true">At the stop</button>
+    <button id="tabRide" type="button" role="tab" aria-selected="false">On the bus</button>
+  </div>
+
+  <!-- Session A: standing at 76059, recording which buses actually stop. -->
+  <section id="paneStop">
+    <p class="instruction">Tap the bus number <span>the moment it stops and the door opens</span></p>
+    <div class="grid" id="grid"></div>
+    <div class="actions">
+      <button class="act" id="mark" type="button">Mark start of hour</button>
+    </div>
+  </section>
+
+  <!-- Session B: riding service 39, stamping each stop as it is reached. -->
+  <section id="paneRide" hidden>
+    <p class="instruction">Tap <span>as the door opens</span> at each stop. Skip if the bus drives past.</p>
+    <button class="nextstop" id="nextStop" type="button">
+      <span class="kicker" id="rideKicker">Next stop</span>
+      <span class="name" id="rideName">-</span>
+      <span class="code" id="rideCode">-</span>
+    </button>
+    <p class="progress" id="rideProgress"></p>
+    <div class="actions">
+      <button class="act" id="skip" type="button">Drove past, skip this stop</button>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="act danger" id="undo" type="button">Undo last</button>
+    <button class="act primary" id="send" type="button">Send to Justin</button>
+  </div>
+
+  <h2>Recorded</h2>
+  <ol id="log"></ol>
+  <div class="empty" id="empty">Nothing yet.</div>
+
+  <p class="hint">
+    Saved on this phone, so locking the screen is fine.<br>
+    Send at the end of each session.
+  </p>
+
+  <div class="actions" style="margin-top:0.8rem">
+    <button class="act" id="clear" type="button">Clear all</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Session A. Only the three services INC-004 named, plus 39 because it is the one
+  // ridden afterwards. Fifteen services call at this stop and roughly 140 buses an
+  // hour pass it, which nobody can tap accurately. Three services is a measurement;
+  // fifteen is a blur.
+  var SERVICES = ["293", "65", "31", "39"];
+
+  // Session B. Service 39, direction 1, in route order from the boarding stop.
+  var RIDE = [
+    { code: "76059", name: "Opp Our Tampines Hub" },
+    { code: "76069", name: "Blk 147" },
+    { code: "76071", name: "Blk 141" },
+    { code: "76081", name: "Opp The Holy Trinity Ch" },
+    { code: "76091", name: "Blk 206" },
+    { code: "76101", name: "Tampines East CC" },
+    { code: "76031", name: "Tampines East Stn Exit B" },
+    { code: "76231", name: "Opp Blk 390" },
+    { code: "76241", name: "Blk 497D" },
+    { code: "98011", name: "Blk 149A" },
+    { code: "98091", name: "Blk 156" }
+  ];
+
+  var KEY = "fieldlog-v1";
+  var state = { mode: "stop", entries: [], rideIdx: 0 };
+
+  try {
+    var saved = localStorage.getItem(KEY);
+    if (saved) {
+      var parsed = JSON.parse(saved);
+      if (parsed && parsed.entries) { state = parsed; }
+    }
+  } catch (e) { /* private mode or storage blocked: run without persistence */ }
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function hhmmss(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()); }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function el(id) { return document.getElementById(id); }
+
+  setInterval(function () { el("clock").textContent = hhmmss(new Date()); }, 200);
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function buzz(pattern) { if (navigator.vibrate) { navigator.vibrate(pattern); } }
+
+  function render(freshIdx) {
+    var log = el("log");
+    log.innerHTML = "";
+    state.entries.forEach(function (entry, i) {
+      var li = document.createElement("li");
+      li.className = (i === freshIdx ? "fresh" : "");
+      var t = document.createElement("span");
+      t.className = "t";
+      t.textContent = entry.time;
+      var s = document.createElement("span");
+      s.className = "s";
+      s.textContent = entry.label;
+      li.appendChild(t);
+      li.appendChild(s);
+      log.appendChild(li);
+    });
+    el("count").textContent = state.entries.length;
+    el("empty").hidden = state.entries.length > 0;
+    renderMark();
+    renderRide();
+  }
+
+  // The count comparison is only meaningful against a known window, so the start and
+  // end are stamped rather than inferred from the first and last bus. Deriving the
+  // label from the entries themselves means Undo repairs it for free.
+  function markCount() {
+    return state.entries.filter(function (e) { return e.kind === "mark"; }).length;
+  }
+
+  function renderMark() {
+    var n = markCount();
+    var btn = el("mark");
+    btn.textContent = n === 0 ? "Mark start of hour" : (n === 1 ? "Mark end of hour" : "Hour recorded");
+    btn.disabled = n >= 2;
+    btn.classList.toggle("primary", n === 0);
+  }
+
+  function renderRide() {
+    var done = state.rideIdx >= RIDE.length;
+    el("nextStop").disabled = done;
+    if (done) {
+      el("rideKicker").textContent = "Finished";
+      el("rideName").textContent = "All stops recorded";
+      el("rideCode").textContent = "Send the log";
+    } else {
+      var stop = RIDE[state.rideIdx];
+      el("rideKicker").textContent = state.rideIdx === 0 ? "Boarding at" : "Next stop";
+      el("rideName").textContent = stop.name;
+      el("rideCode").textContent = stop.code;
+    }
+    el("rideProgress").textContent = Math.min(state.rideIdx, RIDE.length) + " of " + RIDE.length + " stops";
+  }
+
+  function record(label, kind) {
+    var now = new Date();
+    state.entries.push({ date: ymd(now), time: hhmmss(now), label: label, kind: kind });
+    save();
+    render(state.entries.length - 1);
+  }
+
+  // --- Session A ---------------------------------------------------------------
+  var grid = el("grid");
+  SERVICES.forEach(function (svc) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "bus";
+    b.textContent = svc;
+    b.addEventListener("click", function () {
+      record("bus " + svc, "stop");
+      b.classList.add("hit");
+      setTimeout(function () { b.classList.remove("hit"); }, 240);
+      buzz(20);
+    });
+    grid.appendChild(b);
+  });
+
+  el("mark").addEventListener("click", function () {
+    var n = markCount();
+    if (n >= 2) { return; }
+    record(n === 0 ? "--- START ---" : "--- END ---", "mark");
+    buzz([30, 60, 30]);
+  });
+
+  // --- Session B ---------------------------------------------------------------
+  el("nextStop").addEventListener("click", function () {
+    if (state.rideIdx >= RIDE.length) { return; }
+    var stop = RIDE[state.rideIdx];
+    state.rideIdx++;
+    record(stop.code + "  " + stop.name, "ride");
+    buzz(20);
+  });
+
+  el("skip").addEventListener("click", function () {
+    if (state.rideIdx >= RIDE.length) { return; }
+    state.rideIdx++;
+    save();
+    renderRide();
+    buzz([10, 40, 10]);
+  });
+
+  // --- Shared ------------------------------------------------------------------
+  el("undo").addEventListener("click", function () {
+    if (!state.entries.length) { return; }
+    var last = state.entries.pop();
+    if (last.kind === "ride" && state.rideIdx > 0) { state.rideIdx--; }
+    save();
+    render(-1);
+    buzz([14, 45, 14]);
+  });
+
+  function setMode(mode) {
+    state.mode = mode;
+    var atStop = mode === "stop";
+    el("paneStop").hidden = !atStop;
+    el("paneRide").hidden = atStop;
+    el("tabStop").setAttribute("aria-selected", String(atStop));
+    el("tabRide").setAttribute("aria-selected", String(!atStop));
+    el("whereName").textContent = atStop ? "Opp Our Tampines Hub" : "Service 39 to Pasir Ris";
+    el("whereSub").textContent = atStop ? "76059, Tampines Ave 5" : "boarding at 76059";
+    save();
+  }
+  el("tabStop").addEventListener("click", function () { setMode("stop"); });
+  el("tabRide").addEventListener("click", function () { setMode("ride"); });
+
+  function asText() {
+    if (!state.entries.length) { return "(nothing recorded)"; }
+    var head = state.mode === "stop"
+      ? "SESSION A - stop 76059 Opp Our Tampines Hub"
+      : "SESSION B - ride, service 39 direction 1 from 76059";
+    return head + "\n" + state.entries.map(function (entry) {
+      return entry.date + "  " + entry.time + "  " + entry.label;
+    }).join("\n");
+  }
+
+  el("send").addEventListener("click", async function (ev) {
+    var btn = ev.currentTarget;
+    var text = asText();
+    // Web Share opens the phone's own share sheet, so the log can go straight to
+    // WhatsApp. Only available over HTTPS, which is why this is hosted rather than
+    // opened as a local file.
+    if (navigator.share) {
+      try { await navigator.share({ title: "Field log", text: text }); return; }
+      catch (e) { if (e && e.name === "AbortError") { return; } }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = "Send to Justin"; }, 2000);
+    } catch (e) {
+      window.prompt("Copy this:", text);
+    }
+  });
+
+  el("clear").addEventListener("click", function () {
+    if (!window.confirm("Delete everything recorded?")) { return; }
+    state.entries = [];
+    state.rideIdx = 0;
+    save();
+    render(-1);
+  });
+
+  setMode(state.mode || "stop");
+  render(-1);
+})();
+</script>
+</body>
+</html>

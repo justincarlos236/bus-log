@@ -56,3 +56,24 @@ stop 78069
 ```
 
 Plain text, one arrival per line, sortable and diffable.
+
+## field.html
+
+A second page for sessions that need more than one kind of observation.
+
+Live: https://justincarlos236.github.io/bus-log/field.html
+
+Same constraints and same door-open convention, with two modes:
+
+**At the stop.** Four services rather than a full list. A stop served by fifteen
+routes passes well over a hundred buses an hour, which nobody can tap accurately;
+restricting to the few services under test keeps the count trustworthy. A start and
+end marker bracket the session, because a count only means something against a known
+window.
+
+**On the bus.** The route's stops in order, one at a time, advanced by a single large
+tap as each door opens. Recording eleven stop times on a moving bus is the case pen
+and paper handles worst. A skip control advances without recording, for a stop the
+bus passes without opening its door.
+
+Both modes share the log, the undo, and the same plain-text output.
